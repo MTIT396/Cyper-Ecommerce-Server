@@ -17,6 +17,7 @@ const dbConfig = {
   decimalNumbers: true,
   timezone: "+00:00",
   ssl: {
+    ca: process.env.DB_CA.replace(/\\n/g, "\n"),
     rejectUnauthorized: false,
   },
 };
