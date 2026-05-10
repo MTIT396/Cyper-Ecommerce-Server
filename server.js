@@ -28,24 +28,13 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.text({ type: "text/plain" }));
 
 // CORS Configuration - Only allow specific origins
-const allowedOrigins = (
-  process.env.ALLOWED_ORIGINS || "http://localhost:3000"
-).split(",");
+
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
+    origin: process.env.CLIENT_URL,
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
-
 app.use("/api/auth", authRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/users", userRoutes);
