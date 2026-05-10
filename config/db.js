@@ -16,6 +16,9 @@ const dbConfig = {
   keepAliveInitialDelay: 0,
   decimalNumbers: true,
   timezone: "+00:00",
+  ssl: {
+    rejectUnauthorized: false,
+  },
 };
 
 const pool = mysql.createPool(dbConfig);
