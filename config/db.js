@@ -6,18 +6,25 @@ const dbConfig = {
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
-  port: parseInt(process.env.DB_PORT, 10),
+  port: Number(process.env.DB_PORT),
+
   charset: "utf8mb4",
-  connectionLimit: 5,
+
   waitForConnections: true,
+  connectionLimit: 10,
   queueLimit: 0,
+
   connectTimeout: 60000,
+
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
+
   decimalNumbers: true,
+
   timezone: "+00:00",
+
   ssl: {
-    ca: process.env.DB_CA.replace(/\\n/g, "\n"),
+    ca: process.env.DB_CA?.replace(/\\n/g, "\n"),
     rejectUnauthorized: false,
   },
 };
