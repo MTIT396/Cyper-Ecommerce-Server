@@ -93,9 +93,12 @@ exports.deleteProduct = async (req, res, next) => {
 
 const RATING_LEVELS = [5, 4, 3, 2, 1];
 
+/* ================= FILTER PRODUCTS ================= */
+
 exports.filterProducts = async (req, res) => {
   try {
-    const { query, categoryId, rating, price, sort, brands, specs } = req.query;
+    const { query, categoryId, rating, price, sort, brands, specs, colors } =
+      req.query;
 
     /* ================= WHERE BASE ================= */
 
@@ -117,17 +120,22 @@ exports.filterProducts = async (req, res) => {
       params.push(Number(rating));
     }
 
+    /* ================= BRANDS ================= */
+
     if (brands) {
       const brandIds = brands.split(",").map(Number);
+
       where.push(`p.brand_id IN (${brandIds.map(() => "?").join(",")})`);
+
       params.push(...brandIds);
     }
 
-    /* ================= SPECS FILTER (BEST PRACTICE) ================= */
+    /* ================= SPECS ================= */
 
     if (specs) {
       const pairs = specs.split(",").map((p) => {
         const [slug, value] = p.split(":");
+
         return [slug, value?.toLowerCase()];
       });
 
@@ -136,8 +144,10 @@ exports.filterProducts = async (req, res) => {
           EXISTS (
             SELECT 1
             FROM product_variants pv
-            JOIN variant_specs vs ON vs.variant_id = pv.id
-            JOIN spec_definitions sd ON sd.id = vs.spec_id
+            JOIN variant_specs vs
+              ON vs.variant_id = pv.id
+            JOIN spec_definitions sd
+              ON sd.id = vs.spec_id
             WHERE pv.product_id = p.id
               AND pv.status = 'active'
               AND sd.slug = ?
@@ -147,6 +157,32 @@ exports.filterProducts = async (req, res) => {
 
         params.push(slug, value);
       }
+    }
+
+    /* ================= COLORS ================= */
+
+    if (colors) {
+      const colorValues = colors.split(",").map((c) => c.toLowerCase());
+
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM product_variants pv
+          JOIN variant_attributes va
+            ON va.variant_id = pv.id
+          JOIN attribute_values av
+            ON av.id = va.attribute_value_id
+          JOIN attributes a
+            ON a.id = av.attribute_id
+          WHERE pv.product_id = p.id
+            AND pv.status = 'active'
+            AND a.slug = 'color'
+            AND LOWER(av.value)
+              IN (${colorValues.map(() => "?").join(",")})
+        )
+      `);
+
+      params.push(...colorValues);
     }
 
     /* ================= BASE QUERY ================= */
@@ -162,24 +198,26 @@ exports.filterProducts = async (req, res) => {
 
         MIN(
           CASE 
-            WHEN pv.sale_price IS NOT NULL THEN pv.sale_price
+            WHEN pv.sale_price IS NOT NULL
+              THEN pv.sale_price
             ELSE pv.base_price
           END
         ) AS min_price
 
       FROM products p
 
-      LEFT JOIN product_variants pv 
+      LEFT JOIN product_variants pv
         ON pv.product_id = p.id
         AND pv.status = 'active'
 
       WHERE ${where.join(" AND ")}
 
       GROUP BY p.id
+
       HAVING min_price IS NOT NULL
     `;
 
-    /* ================= PRICE FILTER ================= */
+    /* ================= PRICE ================= */
 
     let finalWhere = "";
     const finalParams = [...params];
@@ -187,11 +225,15 @@ exports.filterProducts = async (req, res) => {
     if (price) {
       if (price.endsWith("-up")) {
         const min = Number(price.replace("-up", ""));
+
         finalWhere = "WHERE fp.min_price >= ?";
+
         finalParams.push(min * 1_000_000);
       } else {
         const [min, max] = price.split("-").map(Number);
+
         finalWhere = "WHERE fp.min_price BETWEEN ? AND ?";
+
         finalParams.push(min * 1_000_000, max * 1_000_000);
       }
     }
@@ -200,22 +242,35 @@ exports.filterProducts = async (req, res) => {
 
     let orderSQL = "ORDER BY fp.created_at DESC";
 
-    if (sort === "price_asc") orderSQL = "ORDER BY fp.min_price ASC";
-    if (sort === "price_desc") orderSQL = "ORDER BY fp.min_price DESC";
-    if (sort === "rating_desc") orderSQL = "ORDER BY fp.rating DESC";
+    if (sort === "price_asc") {
+      orderSQL = "ORDER BY fp.min_price ASC";
+    }
+
+    if (sort === "price_desc") {
+      orderSQL = "ORDER BY fp.min_price DESC";
+    }
+
+    if (sort === "rating_desc") {
+      orderSQL = "ORDER BY fp.rating DESC";
+    }
 
     /* ================= FINAL QUERY ================= */
 
     const [productsRaw] = await db.execute(
       `
-      SELECT 
+      SELECT
         p.*,
         fp.min_price,
         fp.base_price,
         fp.sale_price
+
       FROM (${baseSQL}) fp
-      JOIN products p ON p.id = fp.id
+
+      JOIN products p
+        ON p.id = fp.id
+
       ${finalWhere}
+
       ${orderSQL}
       `,
       finalParams,
@@ -224,16 +279,26 @@ exports.filterProducts = async (req, res) => {
     /* ================= EMPTY ================= */
 
     if (!productsRaw.length) {
-      const filters = await buildFilterMetadata({ categoryId });
+      const filters = await buildFilterMetadata({
+        categoryId,
+        query,
+        rating,
+        brands,
+        specs,
+        colors,
+      });
 
       return res.json({
         success: true,
         total: 0,
-        data: { products: [], filters },
+        data: {
+          products: [],
+          filters,
+        },
       });
     }
 
-    /* ================= COLORS ================= */
+    /* ================= PRODUCT COLORS ================= */
 
     const productIds = productsRaw.map((p) => p.id);
 
@@ -244,21 +309,35 @@ exports.filterProducts = async (req, res) => {
         av.id,
         av.value,
         ANY_VALUE(c.hex_code) AS hex
+
       FROM product_variants pv
-      JOIN variant_attributes va ON va.variant_id = pv.id
-      JOIN attribute_values av ON av.id = va.attribute_value_id
-      JOIN attributes a ON a.id = av.attribute_id
-      LEFT JOIN colors c ON LOWER(c.name) = LOWER(av.value)
+
+      JOIN variant_attributes va
+        ON va.variant_id = pv.id
+
+      JOIN attribute_values av
+        ON av.id = va.attribute_value_id
+
+      JOIN attributes a
+        ON a.id = av.attribute_id
+
+      LEFT JOIN colors c
+        ON LOWER(c.name) = LOWER(av.value)
+
       WHERE pv.product_id IN (${productIds.map(() => "?").join(",")})
         AND a.slug = 'color'
+
       GROUP BY pv.product_id, av.id
       `,
       productIds,
     );
 
     const colorMap = {};
+
     for (const row of colorRows) {
-      if (!colorMap[row.product_id]) colorMap[row.product_id] = [];
+      if (!colorMap[row.product_id]) {
+        colorMap[row.product_id] = [];
+      }
 
       colorMap[row.product_id].push({
         id: row.id,
@@ -267,19 +346,22 @@ exports.filterProducts = async (req, res) => {
       });
     }
 
-    /* ================= FINAL RESPONSE ================= */
+    /* ================= RESPONSE ================= */
 
     const products = productsRaw.map((p) => ({
       ...toProductResponse({
         ...p,
         base_price: p.base_price ? Number(p.base_price) : null,
+
         sale_price: p.sale_price ? Number(p.sale_price) : null,
+
         display_price: p.min_price ? Number(p.min_price) : 0,
       }),
+
       colors: colorMap[p.id] || [],
     }));
 
-    /* ================= METADATA ================= */
+    /* ================= FILTERS ================= */
 
     const filters = await buildFilterMetadata({
       categoryId,
@@ -287,7 +369,7 @@ exports.filterProducts = async (req, res) => {
       rating,
       brands,
       specs,
-      price,
+      colors,
     });
 
     return res.json({
@@ -300,11 +382,15 @@ exports.filterProducts = async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ success: false });
+
+    return res.status(500).json({
+      success: false,
+    });
   }
 };
 
-/* ================= BASE QUERY ================= */
+/* ================= BASE WHERE ================= */
+
 function buildBaseWhere({ categoryId, query, rating }) {
   const where = ["p.is_active = 1"];
   const params = [];
@@ -324,8 +410,13 @@ function buildBaseWhere({ categoryId, query, rating }) {
     params.push(Number(rating));
   }
 
-  return { where, params };
+  return {
+    where,
+    params,
+  };
 }
+
+/* ================= FILTER METADATA ================= */
 
 async function buildFilterMetadata({
   categoryId,
@@ -333,6 +424,7 @@ async function buildFilterMetadata({
   rating,
   brands,
   specs,
+  colors,
 }) {
   const { where, params } = buildBaseWhere({
     categoryId,
@@ -340,14 +432,15 @@ async function buildFilterMetadata({
     rating,
   });
 
-  /* ================= BRAND ================= */
+  /* ================= BRANDS ================= */
+
   const brandWhere = [...where];
   const brandParams = [...params];
 
-  // ⚠️ apply specs filter nhưng KHÔNG apply brands
   if (specs) {
     const pairs = specs.split(",").map((p) => {
       const [slug, value] = p.split(":");
+
       return [slug, value?.toLowerCase()];
     });
 
@@ -356,8 +449,10 @@ async function buildFilterMetadata({
         EXISTS (
           SELECT 1
           FROM product_variants pv
-          JOIN variant_specs vs ON vs.variant_id = pv.id
-          JOIN spec_definitions sd ON sd.id = vs.spec_id
+          JOIN variant_specs vs
+            ON vs.variant_id = pv.id
+          JOIN spec_definitions sd
+            ON sd.id = vs.spec_id
           WHERE pv.product_id = p.id
             AND pv.status = 'active'
             AND sd.slug = ?
@@ -369,39 +464,175 @@ async function buildFilterMetadata({
     }
   }
 
+  if (colors) {
+    const colorValues = colors.split(",").map((c) => c.toLowerCase());
+
+    brandWhere.push(`
+      EXISTS (
+        SELECT 1
+        FROM product_variants pv
+        JOIN variant_attributes va
+          ON va.variant_id = pv.id
+        JOIN attribute_values av
+          ON av.id = va.attribute_value_id
+        JOIN attributes a
+          ON a.id = av.attribute_id
+        WHERE pv.product_id = p.id
+          AND pv.status = 'active'
+          AND a.slug = 'color'
+          AND LOWER(av.value)
+            IN (${colorValues.map(() => "?").join(",")})
+      )
+    `);
+
+    brandParams.push(...colorValues);
+  }
+
   const [brandsData] = await db.execute(
     `
-    SELECT DISTINCT b.id AS value, b.name AS label
+    SELECT DISTINCT
+      b.id AS value,
+      b.name AS label
+
     FROM products p
-    JOIN brands b ON b.id = p.brand_id
+
+    JOIN brands b
+      ON b.id = p.brand_id
+
     WHERE ${brandWhere.join(" AND ")}
     `,
     brandParams,
   );
 
+  /* ================= COLORS ================= */
+
+  const colorWhere = [...where];
+  const colorParams = [...params];
+
+  if (brands) {
+    const brandIds = brands.split(",").map(Number);
+
+    colorWhere.push(`p.brand_id IN (${brandIds.map(() => "?").join(",")})`);
+
+    colorParams.push(...brandIds);
+  }
+
+  if (specs) {
+    const pairs = specs.split(",").map((p) => {
+      const [slug, value] = p.split(":");
+
+      return [slug, value?.toLowerCase()];
+    });
+
+    for (const [slug, value] of pairs) {
+      colorWhere.push(`
+        EXISTS (
+          SELECT 1
+          FROM product_variants pv
+          JOIN variant_specs vs
+            ON vs.variant_id = pv.id
+          JOIN spec_definitions sd
+            ON sd.id = vs.spec_id
+          WHERE pv.product_id = p.id
+            AND pv.status = 'active'
+            AND sd.slug = ?
+            AND LOWER(vs.value) = ?
+        )
+      `);
+
+      colorParams.push(slug, value);
+    }
+  }
+
+  const [colorsData] = await db.execute(
+    `
+    SELECT DISTINCT
+      LOWER(av.value) AS value,
+      av.value AS label,
+      ANY_VALUE(c.hex_code) AS hex_code
+
+    FROM products p
+
+    JOIN product_variants pv
+      ON pv.product_id = p.id
+      AND pv.status = 'active'
+
+    JOIN variant_attributes va
+      ON va.variant_id = pv.id
+
+    JOIN attribute_values av
+      ON av.id = va.attribute_value_id
+
+    JOIN attributes a
+      ON a.id = av.attribute_id
+
+    LEFT JOIN colors c
+      ON LOWER(c.name) = LOWER(av.value)
+
+    WHERE ${colorWhere.join(" AND ")}
+      AND a.slug = 'color'
+
+    GROUP BY LOWER(av.value), av.value
+    `,
+    colorParams,
+  );
+
   /* ================= SPECS ================= */
+
   const specWhere = [...where];
   const specParams = [...params];
 
-  // ⚠️ apply brands filter nhưng KHÔNG apply specs
   if (brands) {
     const brandIds = brands.split(",").map(Number);
+
     specWhere.push(`p.brand_id IN (${brandIds.map(() => "?").join(",")})`);
+
     specParams.push(...brandIds);
+  }
+
+  if (colors) {
+    const colorValues = colors.split(",").map((c) => c.toLowerCase());
+
+    specWhere.push(`
+      EXISTS (
+        SELECT 1
+        FROM product_variants pv
+        JOIN variant_attributes va
+          ON va.variant_id = pv.id
+        JOIN attribute_values av
+          ON av.id = va.attribute_value_id
+        JOIN attributes a
+          ON a.id = av.attribute_id
+        WHERE pv.product_id = p.id
+          AND pv.status = 'active'
+          AND a.slug = 'color'
+          AND LOWER(av.value)
+            IN (${colorValues.map(() => "?").join(",")})
+      )
+    `);
+
+    specParams.push(...colorValues);
   }
 
   const [specsRaw] = await db.execute(
     `
-    SELECT DISTINCT 
+    SELECT DISTINCT
       sd.slug,
       sd.name,
       vs.value
+
     FROM products p
-    JOIN product_variants pv 
+
+    JOIN product_variants pv
       ON pv.product_id = p.id
       AND pv.status = 'active'
-    JOIN variant_specs vs ON vs.variant_id = pv.id
-    JOIN spec_definitions sd ON sd.id = vs.spec_id
+
+    JOIN variant_specs vs
+      ON vs.variant_id = pv.id
+
+    JOIN spec_definitions sd
+      ON sd.id = vs.spec_id
+
     WHERE ${specWhere.join(" AND ")}
     `,
     specParams,
@@ -436,7 +667,7 @@ async function buildFilterMetadata({
     label: r.label,
   }));
 
-  const ratingData = [5, 4, 3, 2, 1].map((r) => ({
+  const ratingData = RATING_LEVELS.map((r) => ({
     value: r,
     label: `${r} sao trở lên`,
   }));
@@ -444,6 +675,7 @@ async function buildFilterMetadata({
   return {
     price,
     brands: brandsData,
+    colors: colorsData,
     specs: specsData,
     rating: ratingData,
   };
