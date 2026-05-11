@@ -6,7 +6,7 @@ const AppError = require("../utils/AppError");
 
 /** CREATE PAYMENT */
 exports.createMomoPayment = async (orderId, userId) => {
-  const redirectUrl = `http://localhost:3000/payment/payment-result?order_id=${orderId}`;
+  const redirectUrl = `${process.env.CLIENT_URL}/payment/payment-result?order_id=${orderId}`;
 
   const order = await orderRepo.findOrderById(orderId, userId);
   if (!order) throw new AppError("Order not found", 404);
