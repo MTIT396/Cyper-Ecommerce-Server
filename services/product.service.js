@@ -23,8 +23,9 @@ exports.getProducts = async ({
   category_id,
   type = "new",
 }) => {
-  page = Number(page);
-  limit = Number(limit);
+  const page = Number(page) || 1;
+  const limit = Number(limit) || 10;
+
   const offset = (page - 1) * limit;
 
   let where = "WHERE p.is_active = TRUE";
