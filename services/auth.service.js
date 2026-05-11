@@ -49,7 +49,7 @@ exports.login = async ({ email, password }, res) => {
   }
   const ok = await hashUtil.compare(password, user.password);
   if (!ok) {
-    throw new AppError("Invalid credentials", 401);
+    throw new AppError("Mật khẩu không chính xác.", 401);
   }
 
   const payload = {

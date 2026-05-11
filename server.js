@@ -35,6 +35,7 @@ app.use(
     credentials: true,
   }),
 );
+
 app.use("/api/auth", authRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/users", userRoutes);
