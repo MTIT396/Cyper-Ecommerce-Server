@@ -43,24 +43,28 @@ exports.getProducts = async ({
   const [[rows], [[{ total }]]] = await Promise.all([
     db.execute(
       `SELECT 
-        p.id, p.name, p.slug, p.image_url,
-        p.category_id, p.brand_id, p.rating,
-        p.created_at, p.updated_at,
-        MIN(pv.base_price)  AS base_price,
-        MIN(pv.sale_price)  AS sale_price,
-        MIN(
-          CASE WHEN pv.sale_price IS NOT NULL
-               THEN pv.sale_price ELSE pv.base_price END
-        ) AS display_price,
-        SUM(pv.sold_count)  AS total_sold
-      FROM products p
-      LEFT JOIN product_variants pv
-        ON pv.product_id = p.id AND pv.status = 'active'
-      ${where}
-      GROUP BY p.id
-      ORDER BY ${orderBy}
-      LIMIT ? OFFSET ?`,
-      [...params, Number(limit), Number(offset)],
+    p.id, p.name, p.slug, p.image_url,
+    p.category_id, p.brand_id, p.rating,
+    p.created_at, p.updated_at,
+    MIN(pv.base_price) AS base_price,
+    MIN(pv.sale_price) AS sale_price,
+    MIN(
+      CASE 
+        WHEN pv.sale_price IS NOT NULL
+        THEN pv.sale_price
+        ELSE pv.base_price
+      END
+    ) AS display_price,
+    SUM(pv.sold_count) AS total_sold
+  FROM products p
+  LEFT JOIN product_variants pv
+    ON pv.product_id = p.id
+    AND pv.status = 'active'
+  ${where}
+  GROUP BY p.id
+  ORDER BY ${orderBy}
+  LIMIT ${limit} OFFSET ${offset}`,
+      params,
     ),
 
     db.execute(
