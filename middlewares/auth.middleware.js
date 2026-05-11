@@ -44,6 +44,7 @@ module.exports = async (req, res, next) => {
       secure: process.env.NODE_ENV === "production",
       sameSite: "none",
       maxAge: 15 * 60 * 1000,
+      path: "/",
     });
 
     req.user = payload;

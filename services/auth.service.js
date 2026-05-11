@@ -69,12 +69,14 @@ exports.login = async ({ email, password }, res) => {
       secure: process.env.NODE_ENV === "production",
       sameSite: "none",
       maxAge: 15 * 60 * 1000, // 15 phút
+      path: "/",
     })
     .cookie("refresh_token", refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
+      path: "/",
     });
 
   return {
@@ -100,12 +102,14 @@ exports.logout = async (req, res) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "none",
+    path: "/",
   });
 
   res.clearCookie("refresh_token", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "none",
+    path: "/",
   });
 
   return {
