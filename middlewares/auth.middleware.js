@@ -41,8 +41,8 @@ module.exports = async (req, res, next) => {
     // 4️⃣ SET COOKIE LẠI
     res.cookie("access_token", newAccessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "development",
-      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "none",
       maxAge: 15 * 60 * 1000,
     });
 
