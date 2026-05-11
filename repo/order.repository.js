@@ -178,6 +178,9 @@ exports.clearCart = async (connection, userId) => {
 /* ================= LIST ================= */
 
 exports.findByUserId = async (userId, { limit, offset }) => {
+  limit = Number(limit) || 10;
+  offset = Number(offset) || 0;
+
   const [rows] = await db.execute(
     `
     SELECT
@@ -191,9 +194,9 @@ exports.findByUserId = async (userId, { limit, offset }) => {
     FROM orders
     WHERE user_id = ?
     ORDER BY created_at DESC
-    LIMIT ? OFFSET ?
+    LIMIT ${limit} OFFSET ${offset}
     `,
-    [userId, limit, offset],
+    [userId],
   );
 
   return rows;
