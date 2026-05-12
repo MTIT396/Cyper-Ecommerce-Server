@@ -66,20 +66,21 @@ exports.googleLogin = async (req, res, next) => {
 
     const accessToken = jwtUtil.signAccessToken(payload);
     const refreshToken = jwtUtil.signRefreshToken(payload);
+    const isProd = process.env.NODE_ENV === "production";
 
     //  set cookies
     res
       .cookie("access_token", accessToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "none",
+        secure: isProd,
+        sameSite: isProd ? "none" : "lax",
         maxAge: 15 * 60 * 1000, // 15 phút
         path: "/",
       })
       .cookie("refresh_token", refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "none",
+        secure: isProd,
+        sameSite: isProd ? "none" : "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
         path: "/",
       });

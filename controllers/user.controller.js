@@ -88,40 +88,70 @@ exports.changePassword = async (req, res, next) => {
  * Update username and upload avatar in one request
  */
 exports.updateProfileWithAvatar = async (req, res, next) => {
+  let uploadedImage = null;
+
   try {
     const { username } = req.body;
     const file = req.file;
 
-    // Validate at least one field is provided
+    // Validate input
     if (!username && !file) {
       throw new AppError("Provide username or avatar file", 400);
     }
 
+    // Get current user
+    const currentUser = await service.getById(req.user.id);
+
+    if (!currentUser) {
+      throw new AppError("User not found", 404);
+    }
+
     const updateData = {};
 
-    // Update username if provided
+    // Update username
     if (username) {
       updateData.username = username;
     }
 
-    // Upload avatar if provided
+    // Handle avatar upload
     if (file) {
-      const uploadResult = await uploadService.uploadImage(file);
-      updateData.avatar = uploadResult.url;
+      // Upload new image
+      uploadedImage = await uploadService.uploadImage(file);
+
+      updateData.avatar = uploadedImage.url;
+      updateData.avatar_public_id = uploadedImage.publicId;
     }
 
-    // Update user profile
-    await service.update(req.user.id, updateData);
+    try {
+      // Update database
+      await service.update(req.user.id, updateData);
+
+      // Delete old avatar after DB update success
+      if (
+        file &&
+        currentUser.avatar_public_id &&
+        currentUser.avatar_public_id !== uploadedImage.publicId
+      ) {
+        await uploadService.deleteImage(currentUser.avatar_public_id);
+      }
+    } catch (dbError) {
+      // Rollback uploaded image if DB update fails
+      if (uploadedImage?.publicId) {
+        await uploadService.deleteImage(uploadedImage.publicId);
+      }
+
+      throw dbError;
+    }
 
     res.json({
       success: true,
+      message: "Profile updated successfully",
       data: updateData,
     });
   } catch (err) {
     next(err);
   }
 };
-
 /**
  * GET /users
  * 🔐 ADMIN ONLY

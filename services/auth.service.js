@@ -4,6 +4,8 @@ const jwtUtil = require("../utils/jwt");
 const db = require("../config/db");
 const AppError = require("../utils/AppError");
 
+const isProd = process.env.NODE_ENV === "production";
+
 /**
  * REGISTER
  */
@@ -66,15 +68,15 @@ exports.login = async ({ email, password }, res) => {
   res
     .cookie("access_token", accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "none",
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
       maxAge: 15 * 60 * 1000, // 15 phút
       path: "/",
     })
     .cookie("refresh_token", refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "none",
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
       path: "/",
     });
@@ -101,15 +103,15 @@ exports.logout = async (req, res) => {
   res.clearCookie("access_token", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "none",
-    path: "/",
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
   });
 
   res.clearCookie("refresh_token", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "none",
-    path: "/",
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
   });
 
   return {

@@ -28,7 +28,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.text({ type: "text/plain" }));
 
 // CORS Configuration - Only allow specific origins
-
 app.use(
   cors({
     origin: process.env.CLIENT_URL,

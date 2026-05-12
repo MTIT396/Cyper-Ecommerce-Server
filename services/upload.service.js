@@ -9,7 +9,7 @@ cloudinary.config({
 });
 
 /**
- * Upload image to Cloudinary with validation
+ * Upload image to Cloudinary
  */
 exports.uploadImage = async (file) => {
   return new Promise((resolve, reject) => {
@@ -19,14 +19,16 @@ exports.uploadImage = async (file) => {
 
     // Validate file type
     const allowedMimes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+
     if (!allowedMimes.includes(file.mimetype)) {
       return reject(
         new AppError("Invalid file type. Only images are allowed", 400),
       );
     }
 
-    // Validate file size (max 5MB)
+    // Validate file size (5MB)
     const maxSize = 5 * 1024 * 1024;
+
     if (file.size > maxSize) {
       return reject(new AppError("File size exceeds 5MB limit", 400));
     }
@@ -34,7 +36,7 @@ exports.uploadImage = async (file) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: "next-cyper/avatars",
-        resource_type: "auto",
+        resource_type: "image",
         quality: "auto",
         fetch_format: "auto",
       },
@@ -59,14 +61,20 @@ exports.uploadImage = async (file) => {
  * Delete image from Cloudinary
  */
 exports.deleteImage = async (publicId) => {
-  if (!publicId) {
-    throw new AppError("Public ID is required", 400);
+  try {
+    if (!publicId) {
+      throw new AppError("Public ID is required", 400);
+    }
+
+    await cloudinary.uploader.destroy(publicId);
+
+    return {
+      success: true,
+      message: "Image deleted successfully",
+    };
+  } catch (err) {
+    console.error("Cloudinary delete error:", err.message);
+
+    throw new AppError("Failed to delete image", 500);
   }
-
-  await cloudinary.uploader.destroy(publicId);
-
-  return {
-    success: true,
-    message: "Image deleted successfully",
-  };
 };
